@@ -17,6 +17,7 @@ dev = ["pytest>=8", "pgserver>=0.1.4"]
 [project.scripts]
 notifications-api = "solo_notifications.app:main"
 notifications-db = "solo_notifications.db:main"
+notifications-dispatch = "solo_notifications.dispatch:main"
 
 [build-system]
 requires = ["setuptools>=69"]

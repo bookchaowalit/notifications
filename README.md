@@ -7,11 +7,12 @@ keeps its own Neon database and reuses
 identity, authorization, executions and audit over HTTP with the caller's
 token (same pattern as solo-decisions and solo-habits). Log entries are
 operational records, so the cell publishes no graph events and runs no
-publisher.
+publisher. Delivery runs in the cell too (`notifications-dispatch`, below).
 
 | | |
 |---|---|
 | API | Railway project `solo-notifications`, service `notifications-api` (Serverless) |
+| Dispatcher | service `notifications-dispatcher` (Railway cron, `*/30 * * * *`) |
 | Data | Neon project `solo-notifications`, database `notifications` |
 | Registry | solo-empire `repository-catalog/registries/online-systems.yaml` (`notifications`) |
 
@@ -29,6 +30,19 @@ publisher.
 
 Permissions: `notifications.rule:read|write`, `notifications.notification:read|write`.
 
+## Dispatcher
+
+`notifications-dispatch [--dry-run]` evaluates the active rules (overdue,
+due_soon, high_priority, stale, blocked, reminder) against the tasks cell,
+queues each match once per rule, task snapshot and Bangkok day, then — outside
+22:00-07:00 Asia/Bangkok — sends pending task entries as one Telegram digest
+and each engagement review as its own message, records every result, and
+acknowledges delivered explicit reminders on the task. A broken rule or entry
+is logged and skipped. Variables (Railway only): `EMPIRE_TASKS_API`,
+`EMPIRE_NOTIFICATIONS_API`, `NOTIFICATIONS_DISPATCH_TOKEN` (the 30-day
+`reminder-worker` automation token; rotate with the other cell tokens),
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+
 ## Develop and operate
 
 ```bash
@@ -36,6 +50,8 @@ uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
 .venv/bin/pytest -q          # add ../empire-platform[dev] for the end-to-end test
 NEON_API_KEY=... .venv/bin/notifications-db provision
 npm install && railway config apply && railway up --ci --service notifications-api
+railway up --ci --service notifications-dispatcher
+railway run --service notifications-dispatcher -- .venv/bin/notifications-dispatch --dry-run
 ```
 
 Railway variables (never in the repository): `NOTIFICATIONS_DB_MODE=hosted`,
