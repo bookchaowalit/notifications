@@ -422,6 +422,9 @@ def create_app(connect: Callable[[], psycopg.Connection], verifier: TokenVerifie
                 existing = conn.execute(f"SELECT {LOG_SELECT} FROM notifications.log WHERE dedupe_key = %s",
                                         (body.dedupe_key,)).fetchone()
                 if existing is not None:
+                    # Returning it reveals its content: the caller must be able to read it.
+                    allow(caller, "notifications.notification:read", "notification", str(existing["id"]),
+                          not_found=True)
                     return Plan("", "", "", {"skip": True}, ("existing", existing))
             columns, params = ["workspace_id", *data], [caller.workspace, *data.values()]
             for extra in ("legacy_id", "sent_at"):
@@ -436,6 +439,8 @@ def create_app(connect: Callable[[], psycopg.Connection], verifier: TokenVerifie
             if row is None:
                 existing = conn.execute(f"SELECT {LOG_SELECT} FROM notifications.log WHERE dedupe_key = %s",
                                         (body.dedupe_key,)).fetchone()
+                allow(caller, "notifications.notification:read", "notification", str(existing["id"]),
+                      not_found=True)
                 return Plan("", "", "", {"skip": True}, ("existing", existing))
             return Plan("notifications.notification:write", "notification", str(row["id"]),
                         audit("notification", "queued", row["id"], None, row), ("created", row))

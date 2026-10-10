@@ -114,3 +114,12 @@ def test_runtime_role_sees_nothing_without_a_workspace(cluster, client, token, o
     queue(client, token(*owner))
     with cluster.connect("notifications_api") as conn:
         assert conn.execute("SELECT count(*) FROM notifications.log").fetchone()[0] == 0
+
+
+def test_existing_entry_is_returned_only_to_readers(client, token, owner, platform):
+    key = f"task:9:{uuid.uuid4().hex}"
+    queue(client, token(*owner), dedupe_key=key, metadata={"secret": "x"})
+    writer = uuid.uuid4()
+    platform.grants[writer] = {"notifications.notification:write"}  # may queue, may not read
+    probe = queue(client, token(writer, owner[1]), dedupe_key=key)
+    assert probe.status_code == 404 and "secret" not in probe.text
