@@ -47,6 +47,7 @@ from zoneinfo import ZoneInfo
 BANGKOK = ZoneInfo("Asia/Bangkok")
 CLOSED = ("done", "cancelled", "archived")
 TASK_KINDS = ("overdue", "due_soon", "high_priority", "stale", "blocked", "reminder")
+WHOLE_MESSAGE_KINDS = ("engagement_review", "platform_check")  # sent as their own message, not in the digest
 MAX_PER_DIGEST = 20
 MAX_MESSAGE = 4000  # Telegram allows 4096 characters
 TITLE = 500  # the notifications API limit for title and task_title
@@ -341,7 +342,8 @@ def deliver(notes: Notifications, send: Callable[[str], None] | None, now: datet
     counts = {"delivered": 0, "failed": 0, "waiting": 0, "errors": 0}
     since = (now - timedelta(days=2)).isoformat()
     task_entries = notes.pending(list(TASK_KINDS), since)
-    reviews = notes.pending(["engagement_review"], since)
+    # Whole-message kinds: an engagement review and the daily platform check (warning/breach) from empire-platform.
+    reviews = notes.pending(list(WHOLE_MESSAGE_KINDS), since)
     if send is None or quiet(now) or dry_run:
         counts["waiting"] = len(task_entries) + len(reviews)
         return counts

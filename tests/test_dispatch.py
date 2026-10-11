@@ -228,3 +228,12 @@ def test_a_partly_sent_review_is_not_resent():
 
     dispatch.deliver(notes, flaky, NOON, dry_run=False, clock=lambda: NOON)
     assert notes.entries[0]["delivered_at"] == "now"
+
+
+def test_platform_check_is_sent_as_its_own_message():
+    notes = FakeNotes([])
+    notes.entries.append({"id": 1, "notification_type": "platform_check", "title": "Tasks platform: warning",
+                          "message": "- warn token_expiring", "delivered_at": None, "delivery_attempts": 0})
+    sent = []
+    counts = dispatch.deliver(notes, sent.append, NOON, dry_run=False, clock=lambda: NOON)
+    assert counts["delivered"] == 1 and sent == ["Tasks platform: warning\n\n- warn token_expiring"]
