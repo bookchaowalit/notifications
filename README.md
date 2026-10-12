@@ -11,9 +11,9 @@ publisher. Delivery runs in the cell too (`notifications-dispatch`, below).
 
 | | |
 |---|---|
-| API | Railway project `solo-notifications`, service `notifications-api` (Serverless) |
+| API | Railway project `notifications`, service `notifications-api` (Serverless) |
 | Dispatcher | service `notifications-dispatcher` (Railway cron, `*/30 * * * *`) |
-| Data | Neon project `solo-notifications`, database `notifications` |
+| Data | Neon project `notifications`, database `notifications` |
 | Registry | solo-empire `repository-catalog/registries/online-systems.yaml` (`notifications`) |
 
 ## API
