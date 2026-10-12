@@ -11,29 +11,32 @@ from solo_notifications.mcp_server import build_server
 API_KEY = "EMPIRE_NOTIFICATIONS_API"
 READS = {"notifications.rule.list", "notifications.rule.get", "notifications.notification.list",
          "notifications.notification.get", "notifications.notification.stats"}
-WRITES = {"notifications.notification.create", "notifications.rule.create", "notifications.rule.update"}
+WRITES = {"notifications.notification.create", "notifications.rule.create"}
 ARGS = {"notifications.rule.get": {"id": 1}, "notifications.notification.get": {"id": 1},
         "notifications.notification.create": {"title": "t", "message": "m"},
-        "notifications.rule.create": {"name": "n", "rule_type": "stale"},
-        "notifications.rule.update": {"id": 1, "name": "n2"}}
+        "notifications.rule.create": {"name": "n", "rule_type": "stale"}}
 SAMPLES = [
     ("notifications.rule.list", {"active": True}, "GET", "/v1/notification-rules", {"active": "true"}),
     ("notifications.notification.list", {"notification_type": ["overdue"], "undelivered": True, "limit": 5}, "GET",
      "/v1/notifications", {"notification_type": "overdue", "undelivered": "true", "order": "desc", "limit": "5",
                             "offset": "0"}),
     ("notifications.notification.stats", {}, "GET", "/v1/notifications/stats", {"group_by": "notification_type"}),
-    ("notifications.rule.update", {"id": 3, "name": "x"}, "PATCH", "/v1/notification-rules/3", {}),
 ]
 
 
 def test_notes_are_console_only_and_cannot_use_delivered_kinds():
     srv = server(Fake())
     for kind in ("overdue", "reminder", "platform_check", "engagement_review"):
-        with pytest.raises(Exception, match="invalid_arguments: notification_type"):
+        with pytest.raises(Exception, match="invalid_arguments"):
             call(srv, "notifications.notification.create", {"title": "t", "message": "m", "notification_type": kind})
     for field in ("channel", "delivery_channel", "sent_at", "metadata"):
-        with pytest.raises(Exception, match=f"invalid_arguments: {field}"):
+        with pytest.raises(Exception, match="invalid_arguments"):
             call(srv, "notifications.notification.create", {"title": "t", "message": "m", field: "x"})
+
+
+def test_there_is_no_rule_update_tool_so_an_active_rule_cannot_be_widened():
+    assert "notifications.rule.update" not in names(server(Fake()))
+    assert not any("update" in n for n in names(server(Fake())) if "rule" in n)
 
 
 def test_rules_are_created_inactive_and_cannot_change_channels_or_activation():
@@ -41,10 +44,8 @@ def test_rules_are_created_inactive_and_cannot_change_channels_or_activation():
     call(server(fake), "notifications.rule.create", {"name": "n", "rule_type": "stale"})
     assert b'"is_active":false' in fake.requests[0].content
     for field in ("is_active", "channels"):
-        with pytest.raises(Exception, match=f"invalid_arguments: {field}"):
+        with pytest.raises(Exception, match="invalid_arguments"):
             call(server(Fake()), "notifications.rule.create", {"name": "n", "rule_type": "stale", field: True})
-        with pytest.raises(Exception, match=f"invalid_arguments: {field}"):
-            call(server(Fake()), "notifications.rule.update", {"id": 1, field: True})
 
 
 IDENTITY = {"actor": "x", "workspace_id": "w", "workspace": "w", "tenant_id": "t", "delegation": "d", "token": "t",
@@ -92,7 +93,7 @@ def test_unknown_arguments_are_rejected_before_any_http_call():
     fake = Fake()
     srv = server(fake)
     for name in sorted(READS | WRITES):
-        with pytest.raises(Exception, match="invalid_arguments: surprise"):
+        with pytest.raises(Exception, match="invalid_arguments"):
             call(srv, name, {**ARGS.get(name, {}), "surprise": 1})
     assert fake.requests == []
 
@@ -213,3 +214,33 @@ def test_automation_name_is_validated_and_tokens_are_cleaned(tmp_path):
     token_file.chmod(0o600)
     with pytest.raises(mod.ConfigError):
         mod.bearer({"EMPIRE_TOKEN_FILE": str(token_file)})
+
+
+def _chain(exc: BaseException):
+    seen = []
+    while exc is not None and exc not in seen:
+        seen.append(exc)
+        yield exc
+        exc = exc.__cause__ or exc.__context__
+
+
+def test_validation_errors_are_fixed_and_name_no_argument_or_value():
+    srv = server(Fake())
+    rejected = {}
+    for name in sorted(READS | WRITES):
+        tool = next(t for t in asyncio.run(srv.list_tools()) if t.name == name)
+        attempts = [{"UNTRUSTED_MARKER": "VALUE_MARKER"}, {**ARGS.get(name, {}), "UNTRUSTED_MARKER": 1}]
+        attempts += [{**ARGS.get(name, {}), field: {"k": "VALUE_MARKER"}} for field in tool.input_schema["properties"]]
+        for args in attempts:
+            try:
+                call(srv, name, args)
+            except Exception as exc:  # noqa: BLE001
+                rejected[name] = rejected.get(name, 0) + 1
+                assert str(exc).endswith("invalid_arguments") and "MARKER" not in str(exc)
+                assert exc.__cause__ is None and exc.__context__ is None
+                for link in _chain(exc):
+                    assert "MARKER" not in str(link) and "MARKER" not in repr(link)
+    assert set(rejected) == READS | WRITES
+    with pytest.raises(Exception) as caught:
+        call(srv, "x.UNTRUSTED_MARKER", {"a": "VALUE_MARKER"})
+    assert "MARKER" not in str(caught.value) + repr(caught.value)

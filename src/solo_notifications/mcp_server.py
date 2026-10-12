@@ -122,12 +122,14 @@ class StrictMCPServer(MCPServer):
     async def call_tool(self, name: str, arguments: dict[str, Any], context: Any = None):  # type: ignore[override]
         model = self.argument_models.get(name)
         if model is None:
-            raise ToolFailed(f"unknown tool {name}")
+            raise ToolFailed("unknown_tool")
         try:
             model.model_validate(arguments or {})
-        except ValidationError as exc:
-            fields = sorted({str(error["loc"][0]) for error in exc.errors() if error["loc"]})
-            raise ToolFailed(f"invalid_arguments: {', '.join(fields)}") from exc
+            valid = True
+        except ValidationError:
+            valid = False  # raised below, outside the handler: no cause or context keeps the rejected input
+        if not valid:
+            raise ToolFailed("invalid_arguments") from None  # never names the argument or echoes its value
         return await super().call_tool(name, arguments, context)
 
 
@@ -261,19 +263,6 @@ class RuleCreate(Strict):
     check_interval_minutes: int | None = Field(default=None, gt=0, le=100000)
 
 
-class RuleUpdate(Strict):
-    id: int = Field(gt=0)
-    expected_version: int | None = Field(default=None, ge=1)
-    name: str | None = Field(default=None, min_length=1, max_length=200)
-    description: str | None = Field(default=None, max_length=4000)
-    config: dict[str, Any] | None = None
-    project_filter: str | None = Field(default=None, max_length=200)
-    category_filter: str | None = Field(default=None, max_length=200)
-    priority_filter: int | None = None
-    status_filter: list[str] | None = None
-    check_interval_minutes: int | None = Field(default=None, gt=0, le=100000)
-
-
 def build_server(client: httpx.Client, token: Callable[[], str], *, read_only: bool = False,
                  server: StrictMCPServer | None = None) -> Toolbox:
     box = Toolbox("notifications", "Solo Empire notifications cell. Every tool calls the cell API as the "
@@ -310,13 +299,6 @@ def build_server(client: httpx.Client, token: Callable[[], str], *, read_only: b
     def rule_create(a: RuleCreate) -> Any:
         return box.call("POST", "/v1/notification-rules",
                         body={**a.model_dump(mode="json", exclude_none=True), "is_active": False})
-
-    @box.tool("notifications.rule.update", RuleUpdate,
-              "Change a rule's name, description, config, filters or interval (not its channels or active flag).",
-              write=True)
-    def rule_update(a: RuleUpdate) -> Any:
-        return box.call("PATCH", f"/v1/notification-rules/{a.id}",
-                        body=a.model_dump(mode="json", exclude_none=True, exclude={"id"}))
 
     return box
 

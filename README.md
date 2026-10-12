@@ -51,7 +51,7 @@ an actor, workspace, delegation or token argument (strict models reject unknown 
 call). Errors reach the client as a fixed message from the HTTP status only (for example `403: forbidden`), never upstream text; tokens with whitespace or control characters are refused.
 
 - Tools: `notifications.rule.{list,get}`, `notifications.notification.{list,get,stats}`.
-- Write tools: `notifications.notification.create` (console-only note of kind note/agent_note/status_change, which the dispatcher never sends), `notifications.rule.create` (always inactive) and `notifications.rule.update` (not channels or the active flag), so MCP can never cause an outside message. Set `EMPIRE_MCP_READONLY=1` to register only the read tools.
+- Write tools: `notifications.notification.create` (console-only note of kind note/agent_note/status_change, which the dispatcher never sends), and `notifications.rule.create` (always inactive). There is deliberately no rule-update tool: editing an active rule could widen what the dispatcher sends to a person, so rules are changed by the owner only. MCP can never cause an outside message. Set `EMPIRE_MCP_READONLY=1` to register only the read tools.
 - URL: `EMPIRE_NOTIFICATIONS_API` (env, else the owner-only `~/.config/empire-platform/client.env`); https only (http only on loopback), no credentials, query or fragment.
 - Token, first match wins: `EMPIRE_TOKEN`, `EMPIRE_TOKEN_FILE` (mode 600), then the automation token named by
   `EMPIRE_MCP_AUTOMATION` (default `owner-cli`, lower-case letters, digits and hyphens) from `EMPIRE_AUTOMATION_TOKEN_<NAME>` or
