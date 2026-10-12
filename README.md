@@ -1,11 +1,11 @@
-# solo-notifications
+# notifications
 
 The notifications cell: notification rules and the notification log (what
 was queued for which task snapshot, and whether a channel delivered it). It
 keeps its own Neon database and reuses
 [empire-platform](https://github.com/bookchaowalit/empire-platform) for
 identity, authorization, executions and audit over HTTP with the caller's
-token (same pattern as solo-decisions and solo-habits). Log entries are
+token (same pattern as decisions and habits). Log entries are
 operational records, so the cell publishes no graph events and runs no
 publisher. Delivery runs in the cell too (`notifications-dispatch`, below).
 
