@@ -2,7 +2,7 @@
 The notifications cell: notification rules and the notification log (what
 was queued for which task snapshot, and whether a channel delivered it). It
 keeps its own Neon database and reuses
-[empire-platform](https://github.com/bookchaowalit/platform-empire) for
+[empire-platform](https://github.com/bookchaowalit/empire-platform) for
 identity, authorization, executions and audit over HTTP with the caller's
 token (same pattern as decisions and habits). Log entries are
 operational records, so the cell publishes no graph events and runs no
@@ -62,7 +62,7 @@ call). Errors reach the client as a fixed message from the HTTP status only (for
 
 ```bash
 uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
-.venv/bin/pytest -q          # add ../platform-empire[dev] for the end-to-end test
+.venv/bin/pytest -q          # add ../empire-platform[dev] for the end-to-end test
 NEON_API_KEY=... .venv/bin/notifications-db provision
 npm install && railway config apply && railway up --ci --service notifications-api
 railway up --ci --service notifications-dispatcher
