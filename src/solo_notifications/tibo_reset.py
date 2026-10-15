@@ -158,8 +158,11 @@ _SUPPRESS = re.compile(
 _BANKED_DELIVERED = re.compile(r"\b(?:added|granted|credited)\b.{0,50}\bbanked resets?\b", re.I)
 # A product mention elsewhere does not make an unrelated reset a quota announcement.
 _USAGE_CONTEXT = re.compile(r"\b(?:usage|quotas?|rate limits?|(?:Codex|ChatGPT)\s+resets?)\b", re.I)
-# Commas and interposed clauses do not remove future aspect; sentence boundaries do.
-_FUTURE_ASPECT = re.compile(r"\b(?:will|shall|going to)\b[^.!?;\n]{0,120}\b(?:reset|added|granted|credited)\b", re.I)
+# Attach the modal to the reset predicate through an optional parenthetical and auxiliaries.
+_FUTURE_ASPECT = re.compile(
+    r"\b(?:will|shall|going to)(?:\s+|,\s*[^,.!?;\n]{1,80},\s*)"
+    r"(?:(?:have|be|been|\w+ly|also|already|soon|just)\s+){0,6}"
+    r"(?:reset|added|granted|credited)\b", re.I)
 
 
 def _normalize(text: str) -> str:

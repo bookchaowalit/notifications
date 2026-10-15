@@ -382,3 +382,22 @@ def test_product_mention_does_not_authorize_unrelated_reset_or_reply(text):
 ])
 def test_month_dates_modal_uncertainty_and_sentence_boundaries(text, want):
     assert monitor().classify(text) == want
+
+
+@pytest.mark.parametrize("joiner", [", but", " and"])
+@pytest.mark.parametrize("predicate,category,completed_label,future_label", [
+    ("have reset usage limits", "confirmed", "ประกาศว่ารีเซ็ตแล้ว", "ประกาศว่าจะรีเซ็ต"),
+    ("have added a banked reset", "banked", "ประกาศว่าเพิ่ม banked reset แล้ว",
+     "ประกาศว่าจะเพิ่ม banked reset"),
+])
+def test_unrelated_future_clause_does_not_change_completed_reset_alert(
+        joiner, predicate, category, completed_label, future_label):
+    m = monitor()
+    text = f"We will share more details tomorrow{joiner} we {predicate}"
+    assert m.classify(text) == category
+    notes = Notes()
+    run(notes, [])
+    assert run(notes, m.parse_relay(feed(tweet(text=text)), NOW))["queued"] == 1
+    alert = [e for e in notes.entries.values() if e["notification_type"] == "tibo_reset"][0]
+    assert completed_label in alert["message"]
+    assert future_label not in alert["message"]
