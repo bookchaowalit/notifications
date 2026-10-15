@@ -332,3 +332,53 @@ def test_review_finding3_unrelated_reset_does_not_authorize_landing_reply(text):
     rows = [tweet(text=text), tweet("124", "Landing within the next 2 hours", is_reply=True,
                                    in_reply_to_tweet_id="123")]
     assert m.matches(m.parse_relay(feed(*rows), NOW)) == []
+
+
+@pytest.mark.parametrize("text,category,future_label,completed_label", [
+    ("We will, as promised, have reset usage limits by tomorrow", "promised",
+     "ประกาศว่าจะรีเซ็ต", "ประกาศว่ารีเซ็ตแล้ว"),
+    ("We’ll, after the rollout, have reset usage limits by tomorrow", "promised",
+     "ประกาศว่าจะรีเซ็ต", "ประกาศว่ารีเซ็ตแล้ว"),
+    ("We will, as promised, have added a banked reset by tomorrow", "banked",
+     "ประกาศว่าจะเพิ่ม banked reset", "ประกาศว่าเพิ่ม banked reset แล้ว"),
+    ("We are going to, after the rollout, have granted a banked reset tomorrow", "banked",
+     "ประกาศว่าจะเพิ่ม banked reset", "ประกาศว่าเพิ่ม banked reset แล้ว"),
+])
+def test_interposed_clause_preserves_future_category_and_alert(text, category, future_label, completed_label):
+    m = monitor()
+    assert m.classify(text) == category
+    notes = Notes()
+    run(notes, [])
+    assert run(notes, m.parse_relay(feed(tweet(text=text)), NOW))["queued"] == 1
+    alert = [e for e in notes.entries.values() if e["notification_type"] == "tibo_reset"][0]
+    assert future_label in alert["message"]
+    assert completed_label not in alert["message"]
+
+
+@pytest.mark.parametrize("text", [
+    "We will reset our pricing for Codex tomorrow",
+    "We are resetting our sleep schedule after Codex launch today",
+    "We have reset our pricing limits for Codex",
+    "We have reset our pricing limits for ChatGPT",
+])
+def test_product_mention_does_not_authorize_unrelated_reset_or_reply(text):
+    m = monitor()
+    assert m.classify(text) is None
+    rows = [tweet(text=text), tweet("124", "Landing within the next 2 hours", is_reply=True,
+                                   in_reply_to_tweet_id="123")]
+    assert m.matches(m.parse_relay(feed(*rows), NOW)) == []
+
+
+@pytest.mark.parametrize("text,want", [
+    ("We will reset usage limits on May 1", "promised"),
+    ("We have reset usage limits on May 1", "confirmed"),
+    ("We have reset usage limits in May", "confirmed"),
+    ("We may reset usage limits tomorrow", None),
+    ("We may, after the rollout, have reset usage limits tomorrow", None),
+    ("We may also have added a banked reset tomorrow", None),
+    ("Codex reset coming tomorrow", "promised"),
+    ("We will post details tomorrow. We have reset usage limits", "confirmed"),
+    ("We will post details tomorrow. We added a banked reset", "banked"),
+])
+def test_month_dates_modal_uncertainty_and_sentence_boundaries(text, want):
+    assert monitor().classify(text) == want

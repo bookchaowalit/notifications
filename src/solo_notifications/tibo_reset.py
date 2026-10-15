@@ -151,11 +151,15 @@ def fetch_posts(settings: Settings, now: datetime, *, client: httpx.Client | Non
 
 _SUPPRESS = re.compile(
     r"\?|\b(?:no|not|never|won't|isn't|haven't|hasn't|didn't|don't|doesn't|cannot|can't|without)\b|"
-    r"\b(?:if|unless|maybe|may|might|could|would|hope|wish|speculat\w*|jok\w*|kidding)\b|"
+    r"\b(?:if|unless|maybe|might|could|would|hope|wish|speculat\w*|jok\w*|kidding)\b|"
+    r"\bmay(?:\s+|,\s*[^,.!?;\n]{1,80},\s*)(?:(?:\w+ly|also|well)\s+){0,3}"
+    r"(?:reset|be|have|add|grant|credit)\b|"
     r"\b(?:password|factory|phone|device|git|branch|database|server)\b|^\s*RT\s+@", re.I)
 _BANKED_DELIVERED = re.compile(r"\b(?:added|granted|credited)\b.{0,50}\bbanked resets?\b", re.I)
-_USAGE_CONTEXT = re.compile(r"\b(?:Codex|ChatGPT|usage|quotas?|rate limits?)\b", re.I)
-_FUTURE_ASPECT = re.compile(r"\b(?:will|shall|going to)\s+(?:\w+\s+){0,4}(?:reset|added|granted|credited)\b", re.I)
+# A product mention elsewhere does not make an unrelated reset a quota announcement.
+_USAGE_CONTEXT = re.compile(r"\b(?:usage|quotas?|rate limits?|(?:Codex|ChatGPT)\s+resets?)\b", re.I)
+# Commas and interposed clauses do not remove future aspect; sentence boundaries do.
+_FUTURE_ASPECT = re.compile(r"\b(?:will|shall|going to)\b[^.!?;\n]{0,120}\b(?:reset|added|granted|credited)\b", re.I)
 
 
 def _normalize(text: str) -> str:
