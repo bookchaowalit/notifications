@@ -44,10 +44,12 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from solo_notifications.tibo_reset import run_monitor as run_tibo_monitor
+
 BANGKOK = ZoneInfo("Asia/Bangkok")
 CLOSED = ("done", "cancelled", "archived")
 TASK_KINDS = ("overdue", "due_soon", "high_priority", "stale", "blocked", "reminder")
-WHOLE_MESSAGE_KINDS = ("engagement_review", "platform_check")  # sent as their own message, not in the digest
+WHOLE_MESSAGE_KINDS = ("engagement_review", "platform_check", "tibo_reset")  # sent as their own message, not in the digest
 MAX_PER_DIGEST = 20
 MAX_MESSAGE = 4000  # Telegram allows 4096 characters
 TITLE = 500  # the notifications API limit for title and task_title
@@ -125,6 +127,10 @@ class Notifications:
 
     def queue(self, fields: dict[str, Any]) -> str:
         return self.http.call("POST", "/v1/notifications", fields)["outcome"]
+
+    def lookup(self, key: str) -> dict[str, Any] | None:
+        items = self.http.call("GET", "/v1/notifications", params={"dedupe_key": key, "limit": 1})["items"]
+        return items[0] if items else None
 
     def pending(self, kinds: list[str], since: str) -> list[dict[str, Any]]:
         return self.http.call("GET", "/v1/notifications", params={
@@ -399,15 +405,27 @@ def main(argv: list[str] | None = None) -> int:
     send = telegram_sender(env["TELEGRAM_BOT_TOKEN"], env["TELEGRAM_CHAT_ID"]) \
         if env.get("TELEGRAM_BOT_TOKEN") and env.get("TELEGRAM_CHAT_ID") else None
     now = datetime.now(timezone.utc)
+    rules = {"rules": 0, "matched": 0, "queued": 0, "errors": 0}
+    monitor = {"enabled": False, "matched": 0, "queued": 0, "errors": 0}
     try:
         rules = run_rules(notes, tasks, now, dry_run=args.dry_run)
+    except (ApiError, OSError, urllib.error.URLError) as exc:
+        rules["errors"] += 1
+        _log("rules_failed", error=type(exc).__name__)
+    try:
+        monitor = run_tibo_monitor(notes, now, dry_run=args.dry_run)
+    except Exception as exc:  # preserve existing delivery even if monitor setup fails
+        monitor["errors"] += 1
+        _log("tibo_monitor_failed", error=type(exc).__name__)
+    try:
         delivery = deliver(notes, send, now, dry_run=args.dry_run, tasks=tasks)
     except (ApiError, OSError, urllib.error.URLError) as exc:
         print(json.dumps({"event": "notifications.dispatch", "error": type(exc).__name__, "detail": str(exc)}))
         return 1
     print(json.dumps({"event": "notifications.dispatch", "dry_run": args.dry_run, "telegram": send is not None,
-                      "quiet": quiet(now), **rules, **delivery, "errors": rules["errors"] + delivery["errors"]}))
-    return 1 if delivery["failed"] else 0
+                      "quiet": quiet(now), **rules, **delivery, "tibo_reset": monitor,
+                      "errors": rules["errors"] + delivery["errors"] + monitor["errors"]}))
+    return 1 if delivery["failed"] or rules["errors"] or delivery["errors"] or monitor["errors"] else 0
 
 
 if __name__ == "__main__":
