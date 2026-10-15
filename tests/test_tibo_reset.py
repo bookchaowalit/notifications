@@ -277,3 +277,58 @@ def test_public_preview_outputs_categories_without_accessing_notes_or_writes(mon
 ])
 def test_actual_announcement_forms(text, want):
     assert monitor().classify(text) == want
+
+
+@pytest.mark.parametrize("text", [
+    "We aren't resetting Codex usage limits", "We aren’t resetting Codex usage limits",
+    "We weren't resetting Codex usage limits", "We weren’t resetting Codex usage limits",
+    "We couldn't reset usage limits tomorrow", "We couldn’t reset usage limits tomorrow",
+    "We may reset usage limits tomorrow", "We might reset usage limits tomorrow",
+    "We would reset usage limits tomorrow", "If we reset usage limits tomorrow",
+])
+def test_review_finding1_negations_and_hypotheticals_never_announce(text):
+    assert monitor().classify(text) is None
+
+
+@pytest.mark.parametrize("text", [
+    "We will have reset usage limits in two hours",
+    "We’ll have reset usage limits in two hours",
+    "We are going to have reset usage limits tomorrow",
+])
+def test_review_finding2_future_perfect_is_promised_with_honest_alert(text):
+    m = monitor()
+    assert m.classify(text) == "promised"
+    notes = Notes()
+    run(notes, [])
+    run(notes, m.parse_relay(feed(tweet(text=text)), NOW))
+    alert = [e for e in notes.entries.values() if e['notification_type'] == 'tibo_reset'][0]
+    assert "ประกาศว่าจะรีเซ็ต" in alert["message"]
+    assert "ประกาศว่ารีเซ็ตแล้ว" not in alert["message"]
+
+
+@pytest.mark.parametrize("text", [
+    "We will have added a banked reset tomorrow",
+    "We’ll have granted a banked reset tomorrow",
+    "We are going to have credited a banked reset tomorrow",
+])
+def test_review_finding2_future_banked_credit_never_claims_delivery(text):
+    m = monitor()
+    assert m.classify(text) == "banked"
+    notes = Notes()
+    run(notes, [])
+    run(notes, m.parse_relay(feed(tweet(text=text)), NOW))
+    alert = [e for e in notes.entries.values() if e['notification_type'] == 'tibo_reset'][0]
+    assert "ประกาศว่าจะเพิ่ม banked reset" in alert["message"]
+    assert "ประกาศว่าเพิ่ม banked reset แล้ว" not in alert["message"]
+
+
+@pytest.mark.parametrize("text", [
+    "We will reset our pricing tomorrow", "We are resetting our sleep schedule today",
+    "We have reset our pricing limits", "We have reset the project time limits",
+])
+def test_review_finding3_unrelated_reset_does_not_authorize_landing_reply(text):
+    m = monitor()
+    assert m.classify(text) is None
+    rows = [tweet(text=text), tweet("124", "Landing within the next 2 hours", is_reply=True,
+                                   in_reply_to_tweet_id="123")]
+    assert m.matches(m.parse_relay(feed(*rows), NOW)) == []

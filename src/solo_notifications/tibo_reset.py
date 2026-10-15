@@ -151,30 +151,47 @@ def fetch_posts(settings: Settings, now: datetime, *, client: httpx.Client | Non
 
 _SUPPRESS = re.compile(
     r"\?|\b(?:no|not|never|won't|isn't|haven't|hasn't|didn't|don't|doesn't|cannot|can't|without)\b|"
-    r"\b(?:if|unless|maybe|might|could|would|hope|wish|speculat\w*|jok\w*|kidding)\b|"
+    r"\b(?:if|unless|maybe|may|might|could|would|hope|wish|speculat\w*|jok\w*|kidding)\b|"
     r"\b(?:password|factory|phone|device|git|branch|database|server)\b|^\s*RT\s+@", re.I)
 _BANKED_DELIVERED = re.compile(r"\b(?:added|granted|credited)\b.{0,50}\bbanked resets?\b", re.I)
+_USAGE_CONTEXT = re.compile(r"\b(?:Codex|ChatGPT|usage|quotas?|rate limits?)\b", re.I)
+_FUTURE_ASPECT = re.compile(r"\b(?:will|shall|going to)\s+(?:\w+\s+){0,4}(?:reset|added|granted|credited)\b", re.I)
+
+
+def _normalize(text: str) -> str:
+    text = text.replace("’", "'")
+    text = re.sub(r"(?i)\b(\w+)n't\b", r"\1 not", text)
+    text = re.sub(r"(?i)\b(we|i|you|they)'ve\b", r"\1 have", text)
+    return re.sub(r"(?i)\b(we|i|you|they|he|she|it)'ll\b", r"\1 will", text)
 
 
 def classify(text: str) -> str | None:
     """Conservative language recognition; announcement categories never verify a user's quota."""
     if not isinstance(text, str):
         return None
-    text = re.sub(r"(?i)\b(we|i|you|they)'ve\b", r"\1 have", text.replace("’", "'"))
+    text = _normalize(text)
     if _SUPPRESS.search(text):
         return None
     if re.search(r"\bbanked resets?\b", text, re.I):
         if _BANKED_DELIVERED.search(text) or re.search(r"\b(?:will|going to)\s+(?:add|grant|credit)\b.{0,50}\bbanked resets?\b", text, re.I):
             return "banked"
         return None
-    if re.search(r"\b(?:have|has|just)\s+reset\s+[^.!?\n]{0,80}(?:usage|limits|quotas)\b|"
-                 r"\breset\s+(?:has been|was|is)\s+(?:processed|completed|applied)\b|"
-                 r"\b(?:usage limits|quotas)\s+(?:have been|were|are)\s+reset\b", text, re.I):
+    relevant = _USAGE_CONTEXT.search(text) is not None
+    future = _FUTURE_ASPECT.search(text) is not None
+    completion = re.search(r"\breset\s+(?:has been|was|is)\s+(?:processed|completed|applied)\b", text, re.I)
+    if not future and (completion or (relevant and re.search(
+            r"\b(?:have|has|just)\s+reset\s+[^.!?\n]{0,80}(?:usage|limits|quotas)\b|"
+            r"\b(?:usage limits|quotas)\s+(?:have been|were|are)\s+reset\b", text, re.I))):
         return "confirmed"
-    if re.search(r"\bday\s+\d+\s*/\s*reset\b|"
-                 r"\breset(?:s|ting)?\b.{0,50}\b(?:coming|today|tonight|tomorrow|soon|in \d+ hours?)\b|"
-                 r"\b(?:will|going to|about to)\s+reset\b|\breset\s+(?:incoming|time)\b|"
-                 r"\bresetting\s+(?:Codex\s+)?(?:usage limits|quotas)\b", text, re.I):
+    # Standalone announcements name no other thing being reset; generic promises need usage context.
+    if re.search(r"\bday\s+\d+\s*/\s*reset\b", text, re.I) or re.fullmatch(
+            r"\s*(?:A |The )?reset (?:is )?(?:also )?(?:coming|landing|incoming) "
+            r"(?:by midnight today|today|tonight|tomorrow|soon)[.!]?\s*", text, re.I):
+        return "promised"
+    if relevant and (future or re.search(
+            r"\breset(?:s|ting)?\b.{0,50}\b(?:coming|today|tonight|tomorrow|soon|in \d+ hours?)\b|"
+            r"\b(?:will|going to|about to)\s+reset\b|\breset\s+(?:incoming|time)\b|"
+            r"\bresetting\s+(?:Codex\s+)?(?:usage limits|quotas)\b", text, re.I)):
         return "promised"
     return None
 
@@ -196,7 +213,9 @@ def _alert(post: Post, category: str) -> dict[str, Any]:
     labels = {"promised": "ประกาศว่าจะรีเซ็ต", "confirmed": "ประกาศว่ารีเซ็ตแล้ว", "banked": "ประกาศเกี่ยวกับ banked reset"}
     detail = labels[category]
     if category == "banked":
-        detail = "ประกาศว่าเพิ่ม banked reset แล้ว" if _BANKED_DELIVERED.search(post.text) else "ประกาศว่าจะเพิ่ม banked reset"
+        text = _normalize(post.text)
+        delivered = _BANKED_DELIVERED.search(text) and not _FUTURE_ASPECT.search(text)
+        detail = "ประกาศว่าเพิ่ม banked reset แล้ว" if delivered else "ประกาศว่าจะเพิ่ม banked reset"
     return {"notification_type": "tibo_reset", "title": f"Tibo — {labels[category]}", "severity": "info", "channel": "telegram",
             "message": f"Tibo (@thsottiaux): {detail}\n"
                        f"เวลาโพสต์: {post.at.astimezone(BANGKOK):%Y-%m-%d %H:%M} (Asia/Bangkok)\n\n"
