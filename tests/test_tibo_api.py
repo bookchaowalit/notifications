@@ -7,7 +7,9 @@ from conftest import OWNER_ACTIONS
 from solo_notifications import dispatch, tibo_reset
 
 
-def test_seed_restart_dedupe_and_delivery_through_notifications_api(client, token, platform):
+def test_seed_restart_dedupe_and_delivery_through_notifications_api(
+    client, token, platform
+):
     actor, workspace = uuid.uuid4(), uuid.uuid4()
     platform.grants[actor] = set(OWNER_ACTIONS)
     headers = token(actor, workspace)
@@ -16,15 +18,21 @@ def test_seed_restart_dedupe_and_delivery_through_notifications_api(client, toke
         # Only the external HTTP boundary is replaced; API validation, auth, transactions,
         # dedupe and durable rows all run against the disposable PostgreSQL fixture.
         def call(self, method, path, body=None, params=None):
-            response = client.request(method, path, json=body, params=params, headers=headers)
+            response = client.request(
+                method, path, json=body, params=params, headers=headers
+            )
             if response.is_error:
                 raise dispatch.ApiError(response.status_code, path)
             return response.json()
 
     now = datetime(2026, 10, 15, 6, tzinfo=timezone.utc)
     enabled = {"TIBO_RESET_MONITOR_ENABLED": "1"}
-    old = tibo_reset.Post("100", "Day 9/ Reset", now - timedelta(days=1),
-                          "https://x.com/thsottiaux/status/100")
+    old = tibo_reset.Post(
+        "100",
+        "Day 9/ Reset",
+        now - timedelta(days=1),
+        "https://x.com/thsottiaux/status/100",
+    )
     notes = dispatch.Notifications(LocalHttp())
     seeded = tibo_reset.run_monitor(notes, now, env=enabled, fetch=lambda *_: [old])
     assert seeded["initialized"] and seeded["queued"] == 0 and seeded["errors"] == 0
@@ -32,23 +40,45 @@ def test_seed_restart_dedupe_and_delivery_through_notifications_api(client, toke
     # A new client has no process-local memory. It must recover the seed and dedupe
     # from the API, queue only the new post, and preserve its original source.
     restarted = dispatch.Notifications(LocalHttp())
-    fresh = tibo_reset.Post("101", "We have reset usage limits for Codex", now + timedelta(minutes=1),
-                            "https://x.com/thsottiaux/status/101")
-    first = tibo_reset.run_monitor(restarted, now + timedelta(minutes=30), env=enabled,
-                                   fetch=lambda *_: [old, fresh])
-    repeat = tibo_reset.run_monitor(restarted, now + timedelta(hours=1), env=enabled,
-                                    fetch=lambda *_: [old, fresh])
+    fresh = tibo_reset.Post(
+        "101",
+        "We have reset usage limits for Codex",
+        now + timedelta(minutes=1),
+        "https://x.com/thsottiaux/status/101",
+    )
+    first = tibo_reset.run_monitor(
+        restarted,
+        now + timedelta(minutes=30),
+        env=enabled,
+        fetch=lambda *_: [old, fresh],
+    )
+    repeat = tibo_reset.run_monitor(
+        restarted, now + timedelta(hours=1), env=enabled, fetch=lambda *_: [old, fresh]
+    )
     assert first["queued"] == 1 and first["errors"] == 0
     assert repeat["queued"] == 0 and repeat["errors"] == 0
 
     sent = []
-    delivery = dispatch.deliver(restarted, sent.append, now + timedelta(hours=1), dry_run=False,
-                                 clock=lambda: now + timedelta(hours=1))
+    delivery = dispatch.deliver(
+        restarted,
+        sent.append,
+        now + timedelta(hours=1),
+        dry_run=False,
+        clock=lambda: now + timedelta(hours=1),
+    )
     assert delivery["delivered"] == 1 and len(sent) == 1
     assert "https://x.com/thsottiaux/status/101" in sent[0]
     assert "ประกาศว่ารีเซ็ตแล้ว" in sent[0] and "Data: codex-reset.com" in sent[0]
-    assert dispatch.deliver(restarted, sent.append, now + timedelta(hours=1), dry_run=False,
-                            clock=lambda: now + timedelta(hours=1))["delivered"] == 0
+    assert (
+        dispatch.deliver(
+            restarted,
+            sent.append,
+            now + timedelta(hours=1),
+            dry_run=False,
+            clock=lambda: now + timedelta(hours=1),
+        )["delivered"]
+        == 0
+    )
     marker = restarted.lookup(tibo_reset.STATE_KEY)
     assert marker["delivery_attempts"] == 0 and marker["delivered_at"] is None
     entries = client.get("/v1/notifications", headers=headers).json()["items"]
