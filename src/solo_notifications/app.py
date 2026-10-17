@@ -430,6 +430,7 @@ def create_app(
     def get_rule(rule_id: int, caller: Caller) -> Rule:
         allow(caller, "notifications.rule:read", "rule", str(rule_id), not_found=True)
         with bound(caller) as conn:
+            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- table/column names are module constants or spec-validated identifiers; values are bound as %s parameters
             row = conn.execute(
                 f"SELECT {RULE_SELECT} FROM notifications.rules WHERE id = %s",
                 (rule_id,),
@@ -500,6 +501,7 @@ def create_app(
         data = rule_values(body, body.model_fields_set - {"expected_version"})
 
         def op(conn: psycopg.Connection) -> Plan:
+            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- table/column names are module constants or spec-validated identifiers; values are bound as %s parameters
             before = conn.execute(
                 f"SELECT {RULE_SELECT} FROM notifications.rules WHERE id = %s FOR UPDATE",
                 (rule_id,),
@@ -616,6 +618,7 @@ def create_app(
             not_found=True,
         )
         with bound(caller) as conn:
+            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- table/column names are module constants or spec-validated identifiers; values are bound as %s parameters
             row = conn.execute(
                 f"SELECT {LOG_SELECT} FROM notifications.log WHERE id = %s",
                 (notification_id,),
@@ -633,6 +636,7 @@ def create_app(
 
         def op(conn: psycopg.Connection) -> Plan:
             if body.dedupe_key:
+                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- table/column names are module constants or spec-validated identifiers; values are bound as %s parameters
                 existing = conn.execute(
                     f"SELECT {LOG_SELECT} FROM notifications.log WHERE dedupe_key = %s",
                     (body.dedupe_key,),
@@ -664,6 +668,7 @@ def create_app(
                 params,
             ).fetchone()
             if row is None:
+                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- table/column names are module constants or spec-validated identifiers; values are bound as %s parameters
                 existing = conn.execute(
                     f"SELECT {LOG_SELECT} FROM notifications.log WHERE dedupe_key = %s",
                     (body.dedupe_key,),
@@ -706,6 +711,7 @@ def create_app(
             )
 
         def op(conn: psycopg.Connection) -> Plan:
+            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- table/column names are module constants or spec-validated identifiers; values are bound as %s parameters
             before = conn.execute(
                 f"SELECT {LOG_SELECT} FROM notifications.log WHERE id = %s FOR UPDATE",
                 (notification_id,),

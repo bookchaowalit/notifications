@@ -132,11 +132,13 @@ class LocalCluster:
             if not conn.execute(
                 "SELECT 1 FROM pg_database WHERE datname = %s", (DATABASE,)
             ).fetchone():
+                # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- psycopg sql.SQL composition: names are sql.Identifier, the password is sql.Literal
                 conn.execute(
                     sql.SQL("CREATE DATABASE {} OWNER {}").format(
                         sql.Identifier(DATABASE), sql.Identifier(MIGRATOR)
                     )
                 )
+            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- psycopg sql.SQL composition: names are sql.Identifier, the password is sql.Literal
             conn.execute(
                 sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
                     sql.Identifier(DATABASE),
@@ -350,6 +352,7 @@ def provision(project_name: str, region: str) -> str:
             present = conn.execute(
                 "SELECT 1 FROM pg_roles WHERE rolname = %s", (role,)
             ).fetchone()
+            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- psycopg sql.SQL composition: names are sql.Identifier, the password is sql.Literal
             conn.execute(
                 sql.SQL(
                     "{} ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS NOINHERIT PASSWORD {}"
@@ -360,11 +363,13 @@ def provision(project_name: str, region: str) -> str:
                 )
             )
             urls[short] = _url(host, role, role_password)
+        # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- psycopg sql.SQL composition: names are sql.Identifier, the password is sql.Literal
         conn.execute(
             sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(
                 sql.Identifier(DATABASE)
             )
         )
+        # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query -- psycopg sql.SQL composition: names are sql.Identifier, the password is sql.Literal
         conn.execute(
             sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
                 sql.Identifier(DATABASE),
