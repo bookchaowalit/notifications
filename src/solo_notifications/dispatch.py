@@ -40,7 +40,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -346,9 +346,7 @@ def evaluate(rule: dict[str, Any], tasks: Tasks, now: datetime) -> list[dict[str
     if kind == "reminder":
         rows = [
             t
-            for t in tasks.list(
-                reminder_due_before=now.astimezone(timezone.utc).isoformat()
-            )
+            for t in tasks.list(reminder_due_before=now.astimezone(UTC).isoformat())
             if t["status"] not in ("done", "cancelled")
         ]
         return [
@@ -378,7 +376,7 @@ def due(rule: dict[str, Any], now: datetime) -> bool:
     last = rule.get("last_checked_at")
     if not last:
         return True
-    checked = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
+    checked = datetime.fromisoformat(str(last))
     return now - checked >= timedelta(
         minutes=int(rule.get("check_interval_minutes") or 60)
     )
@@ -593,7 +591,7 @@ def deliver(
         batches.append((taken, [text]))
         counts["waiting"] += len(task_entries) - len(taken)
     batches += [([r], chunks(f"{r['title']}\n\n{r['message']}")) for r in reviews]
-    clock = clock or (lambda: datetime.now(timezone.utc))
+    clock = clock or (lambda: datetime.now(UTC))
     for entries, texts in batches:
         if quiet(clock()):  # a long run that reaches quiet hours stops sending
             counts["waiting"] += len(entries)
@@ -677,7 +675,7 @@ def main(argv: list[str] | None = None) -> int:
         if env.get("TELEGRAM_BOT_TOKEN") and env.get("TELEGRAM_CHAT_ID")
         else None
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rules = {"rules": 0, "matched": 0, "queued": 0, "errors": 0}
     monitor = {"enabled": False, "matched": 0, "queued": 0, "errors": 0}
     try:
@@ -687,7 +685,7 @@ def main(argv: list[str] | None = None) -> int:
         _log("rules_failed", error=type(exc).__name__)
     try:
         monitor = run_tibo_monitor(notes, now, dry_run=args.dry_run)
-    except Exception as exc:  # preserve existing delivery even if monitor setup fails
+    except Exception as exc:  # noqa: BLE001 - preserve existing delivery even if monitor setup fails
         monitor["errors"] += 1
         _log("tibo_monitor_failed", error=type(exc).__name__)
     try:

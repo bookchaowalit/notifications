@@ -4,7 +4,6 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-
 from conftest import OWNER_ACTIONS
 
 

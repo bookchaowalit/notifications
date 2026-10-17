@@ -19,15 +19,16 @@ from fastapi.testclient import TestClient
 
 pytest.importorskip("platform_api")
 
-from empire_platform.devdb import Cluster, bootstrap, migrate as platform_migrate  # noqa: E402
-from empire_platform.devtoken import key_pair, mint  # noqa: E402
-from empire_platform.permissions import NOTIFICATIONS_OWNER  # noqa: E402
-from platform_api.routes import register  # noqa: E402
-from tasks_api.auth import TokenVerifier as PlatformVerifier  # noqa: E402
+from empire_platform.devdb import Cluster, bootstrap
+from empire_platform.devdb import migrate as platform_migrate
+from empire_platform.devtoken import key_pair, mint
+from empire_platform.permissions import NOTIFICATIONS_OWNER
+from platform_api.routes import register
+from tasks_api.auth import TokenVerifier as PlatformVerifier
 
-from solo_notifications.app import create_app  # noqa: E402
-from solo_notifications.auth import TokenVerifier  # noqa: E402
-from solo_notifications.platform import HttpPlatform  # noqa: E402
+from solo_notifications.app import create_app
+from solo_notifications.auth import TokenVerifier
+from solo_notifications.platform import HttpPlatform
 
 ISSUER = "empire-e2e"
 

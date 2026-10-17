@@ -38,6 +38,8 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
+)
+from fastapi import (
     Request as HttpRequest,
 )
 from psycopg.rows import dict_row
@@ -712,8 +714,10 @@ def create_app(
                 raise HTTPException(status_code=404, detail={"error": "not_found"})
             if body.outcome == "delivered":
                 sql, params = (
-                    "delivered_at = now(), delivery_channel = %s, delivery_error = NULL,"
-                    " delivery_attempts = delivery_attempts + 1",
+                    (
+                        "delivered_at = now(), delivery_channel = %s, delivery_error = NULL,"
+                        " delivery_attempts = delivery_attempts + 1"
+                    ),
                     [body.channel],
                 )
             elif body.outcome == "failed":

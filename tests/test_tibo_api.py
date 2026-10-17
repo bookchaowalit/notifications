@@ -1,9 +1,10 @@
 """The monitor's state and alerts survive restarts through the real local API."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from conftest import OWNER_ACTIONS
+
 from solo_notifications import dispatch, tibo_reset
 
 
@@ -25,7 +26,7 @@ def test_seed_restart_dedupe_and_delivery_through_notifications_api(
                 raise dispatch.ApiError(response.status_code, path)
             return response.json()
 
-    now = datetime(2026, 10, 15, 6, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 15, 6, tzinfo=UTC)
     enabled = {"TIBO_RESET_MONITOR_ENABLED": "1"}
     old = tibo_reset.Post(
         "100",

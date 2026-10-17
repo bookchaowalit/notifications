@@ -2,8 +2,9 @@
 
 import json
 
+from test_dispatch import NIGHT, NOON, FakeNotes, FakeTasks
+
 from solo_notifications import dispatch
-from test_dispatch import FakeNotes, FakeTasks, NOON, NIGHT
 
 
 def test_reset_alert_is_separate_quiet_hours_apply_and_state_is_never_delivered():

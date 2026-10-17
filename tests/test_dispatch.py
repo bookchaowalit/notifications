@@ -1,11 +1,11 @@
 """The dispatcher: rule evaluation, once-a-day queueing, quiet hours, digest delivery and failures."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from solo_notifications import dispatch
 
-NOON = datetime(2026, 10, 10, 5, 0, tzinfo=timezone.utc)  # 12:00 in Bangkok
-NIGHT = datetime(2026, 10, 10, 16, 0, tzinfo=timezone.utc)  # 23:00 in Bangkok
+NOON = datetime(2026, 10, 10, 5, 0, tzinfo=UTC)  # 12:00 in Bangkok
+NIGHT = datetime(2026, 10, 10, 16, 0, tzinfo=UTC)  # 23:00 in Bangkok
 
 
 class FakeTasks:

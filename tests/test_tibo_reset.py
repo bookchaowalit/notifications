@@ -1,12 +1,12 @@
 """Reset-monitor contracts; all source I/O uses fake HTTP transport."""
 
 import importlib
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 
-NOW = datetime(2026, 10, 15, 6, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 15, 6, tzinfo=UTC)
 
 
 def monitor():
@@ -150,11 +150,15 @@ def test_relay_fetch_once_bounded_json_and_no_authentication():
 )
 def test_source_rejects_redirect_malformed_or_oversized(status, body):
     m = monitor()
-    with httpx.Client(
-        transport=httpx.MockTransport(lambda r: httpx.Response(status, content=body))
-    ) as client:
-        with pytest.raises((ValueError, httpx.HTTPError)):
-            m.fetch_posts(m.Settings(enabled=True), NOW, client=client)
+    with (
+        httpx.Client(
+            transport=httpx.MockTransport(
+                lambda r: httpx.Response(status, content=body)
+            )
+        ) as client,
+        pytest.raises((ValueError, httpx.HTTPError)),
+    ):
+        m.fetch_posts(m.Settings(enabled=True), NOW, client=client)
 
 
 class Notes:
@@ -198,9 +202,9 @@ def test_first_success_seeds_without_history_then_new_posts_queue_once():
     fresh = m.parse_relay(feed(tweet("124", at=NOW + timedelta(minutes=1))), NOW)
     assert run(notes, fresh, NOW + timedelta(minutes=30))["queued"] == 1
     assert run(notes, fresh, NOW + timedelta(hours=1))["queued"] == 0
-    alert = [
+    alert = next(
         v for v in notes.entries.values() if v["notification_type"] == "tibo_reset"
-    ][0]
+    )
     assert "Data: codex-reset.com" in alert["message"]
     assert "https://x.com/thsottiaux/status/124" in alert["message"]
     assert "13:01" in alert["message"] and "Day 10/ Reset" in alert["message"]
@@ -393,9 +397,11 @@ def test_x_wrong_identity_stops_before_timeline_request():
             200, json={"data": {"id": "99", "username": "thsottiaux"}}
         )
 
-    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
-        with pytest.raises(ValueError):
-            m.fetch_posts(settings, NOW, client=client)
+    with (
+        httpx.Client(transport=httpx.MockTransport(respond)) as client,
+        pytest.raises(ValueError),
+    ):
+        m.fetch_posts(settings, NOW, client=client)
     assert len(seen) == 1
 
 
@@ -475,9 +481,9 @@ def test_review_finding2_future_perfect_is_promised_with_honest_alert(text):
     notes = Notes()
     run(notes, [])
     run(notes, m.parse_relay(feed(tweet(text=text)), NOW))
-    alert = [
+    alert = next(
         e for e in notes.entries.values() if e["notification_type"] == "tibo_reset"
-    ][0]
+    )
     assert "ประกาศว่าจะรีเซ็ต" in alert["message"]
     assert "ประกาศว่ารีเซ็ตแล้ว" not in alert["message"]
 
@@ -496,9 +502,9 @@ def test_review_finding2_future_banked_credit_never_claims_delivery(text):
     notes = Notes()
     run(notes, [])
     run(notes, m.parse_relay(feed(tweet(text=text)), NOW))
-    alert = [
+    alert = next(
         e for e in notes.entries.values() if e["notification_type"] == "tibo_reset"
-    ][0]
+    )
     assert "ประกาศว่าจะเพิ่ม banked reset" in alert["message"]
     assert "ประกาศว่าเพิ่ม banked reset แล้ว" not in alert["message"]
 
@@ -564,9 +570,9 @@ def test_interposed_clause_preserves_future_category_and_alert(
     notes = Notes()
     run(notes, [])
     assert run(notes, m.parse_relay(feed(tweet(text=text)), NOW))["queued"] == 1
-    alert = [
+    alert = next(
         e for e in notes.entries.values() if e["notification_type"] == "tibo_reset"
-    ][0]
+    )
     assert future_label in alert["message"]
     assert completed_label not in alert["message"]
 
@@ -635,8 +641,8 @@ def test_unrelated_future_clause_does_not_change_completed_reset_alert(
     notes = Notes()
     run(notes, [])
     assert run(notes, m.parse_relay(feed(tweet(text=text)), NOW))["queued"] == 1
-    alert = [
+    alert = next(
         e for e in notes.entries.values() if e["notification_type"] == "tibo_reset"
-    ][0]
+    )
     assert completed_label in alert["message"]
     assert future_label not in alert["message"]

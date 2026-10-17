@@ -6,9 +6,10 @@ import argparse
 import json
 import os
 import re
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Mapping
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -60,11 +61,11 @@ class Post:
 
 def _date(value: Any) -> datetime:
     if not isinstance(value, str):
-        raise ValueError("missing timestamp")
-    stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        raise ValueError("missing timestamp")  # noqa: TRY004 - callers treat any malformed relay data as ValueError
+    stamp = datetime.fromisoformat(value)
     if stamp.tzinfo is None:
         raise ValueError("timestamp must include timezone")
-    return stamp.astimezone(timezone.utc)
+    return stamp.astimezone(UTC)
 
 
 def _post(row: Any, *, provenance: str = "codex-reset.com") -> Post | None:
@@ -81,7 +82,7 @@ def _post(row: Any, *, provenance: str = "codex-reset.com") -> Post | None:
         or not 0 < len(text) <= 6000
     ):
         return None
-    if re.match(r"\s*RT\s+@", text, re.I):
+    if re.match(r"\s*RT\s+@", text, re.IGNORECASE):
         return None
     try:
         at = _date(row.get("at"))
@@ -174,7 +175,7 @@ def fetch_posts(
         raise ValueError("invalid X response")
     rows = payload.get("data", [])
     if not isinstance(rows, list):
-        raise ValueError("invalid X posts")
+        raise ValueError("invalid X posts")  # noqa: TRY004 - callers treat any malformed X response as ValueError
     posts = []
     for row in rows:
         if not isinstance(row, dict) or row.get("author_id") != settings.user_id:
@@ -205,21 +206,21 @@ _SUPPRESS = re.compile(
     r"\bmay(?:\s+|,\s*[^,.!?;\n]{1,80},\s*)(?:(?:\w+ly|also|well)\s+){0,3}"
     r"(?:reset|be|have|add|grant|credit)\b|"
     r"\b(?:password|factory|phone|device|git|branch|database|server)\b|^\s*RT\s+@",
-    re.I,
+    re.IGNORECASE,
 )
 _BANKED_DELIVERED = re.compile(
-    r"\b(?:added|granted|credited)\b.{0,50}\bbanked resets?\b", re.I
+    r"\b(?:added|granted|credited)\b.{0,50}\bbanked resets?\b", re.IGNORECASE
 )
 # A product mention elsewhere does not make an unrelated reset a quota announcement.
 _USAGE_CONTEXT = re.compile(
-    r"\b(?:usage|quotas?|rate limits?|(?:Codex|ChatGPT)\s+resets?)\b", re.I
+    r"\b(?:usage|quotas?|rate limits?|(?:Codex|ChatGPT)\s+resets?)\b", re.IGNORECASE
 )
 # Attach the modal to the reset predicate through an optional parenthetical and auxiliaries.
 _FUTURE_ASPECT = re.compile(
     r"\b(?:will|shall|going to)(?:\s+|,\s*[^,.!?;\n]{1,80},\s*)"
     r"(?:(?:have|be|been|\w+ly|also|already|soon|just)\s+){0,6}"
     r"(?:reset|added|granted|credited)\b",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -237,18 +238,20 @@ def classify(text: str) -> str | None:
     text = _normalize(text)
     if _SUPPRESS.search(text):
         return None
-    if re.search(r"\bbanked resets?\b", text, re.I):
+    if re.search(r"\bbanked resets?\b", text, re.IGNORECASE):
         if _BANKED_DELIVERED.search(text) or re.search(
             r"\b(?:will|going to)\s+(?:add|grant|credit)\b.{0,50}\bbanked resets?\b",
             text,
-            re.I,
+            re.IGNORECASE,
         ):
             return "banked"
         return None
     relevant = _USAGE_CONTEXT.search(text) is not None
     future = _FUTURE_ASPECT.search(text) is not None
     completion = re.search(
-        r"\breset\s+(?:has been|was|is)\s+(?:processed|completed|applied)\b", text, re.I
+        r"\breset\s+(?:has been|was|is)\s+(?:processed|completed|applied)\b",
+        text,
+        re.IGNORECASE,
     )
     if not future and (
         completion
@@ -258,17 +261,17 @@ def classify(text: str) -> str | None:
                 r"\b(?:have|has|just)\s+reset\s+[^.!?\n]{0,80}(?:usage|limits|quotas)\b|"
                 r"\b(?:usage limits|quotas)\s+(?:have been|were|are)\s+reset\b",
                 text,
-                re.I,
+                re.IGNORECASE,
             )
         )
     ):
         return "confirmed"
     # Standalone announcements name no other thing being reset; generic promises need usage context.
-    if re.search(r"\bday\s+\d+\s*/\s*reset\b", text, re.I) or re.fullmatch(
+    if re.search(r"\bday\s+\d+\s*/\s*reset\b", text, re.IGNORECASE) or re.fullmatch(
         r"\s*(?:A |The )?reset (?:is )?(?:also )?(?:coming|landing|incoming) "
         r"(?:by midnight today|today|tonight|tomorrow|soon)[.!]?\s*",
         text,
-        re.I,
+        re.IGNORECASE,
     ):
         return "promised"
     if relevant and (
@@ -278,7 +281,7 @@ def classify(text: str) -> str | None:
             r"\b(?:will|going to|about to)\s+reset\b|\breset\s+(?:incoming|time)\b|"
             r"\bresetting\s+(?:Codex\s+)?(?:usage limits|quotas)\b",
             text,
-            re.I,
+            re.IGNORECASE,
         )
     ):
         return "promised"
@@ -296,13 +299,13 @@ def matches(posts: list[Post]) -> list[tuple[Post, str]]:
             category is None
             and post.parent_id in accepted
             and not _SUPPRESS.search(post.text)
-        ):
-            if re.fullmatch(
+            and re.fullmatch(
                 r"\s*Landing within (?:the )?next\s*\d+\s*hours?[.!]?\s*",
                 post.text,
-                re.I,
-            ):
-                category = "promised"
+                re.IGNORECASE,
+            )
+        ):
+            category = "promised"
         if category:
             result.append((post, category))
     return result
@@ -398,9 +401,9 @@ def run_monitor(
                 continue
             try:
                 result["queued"] += notes.queue(_alert(post, category)) == "created"
-            except Exception:
+            except Exception:  # noqa: BLE001 - count the failure and keep queueing the other alerts
                 result["errors"] += 1
-    except Exception:
+    except Exception:  # noqa: BLE001 - the monitor must never break the dispatch run
         # Do not log exception text: sources, API clients or malformed config may carry secrets.
         result["errors"] += 1
     return result
@@ -416,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         help="read the public relay only; never read API/bot config or write state",
     )
     parser.parse_args(argv)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     try:
         posts = fetch_posts(Settings(enabled=True), now)
         recent = [p for p in posts if now - timedelta(hours=48) <= p.at <= now]
@@ -442,7 +445,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - preview reports the error class instead of a traceback
         print(
             json.dumps(
                 {
