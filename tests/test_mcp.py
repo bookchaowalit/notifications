@@ -9,18 +9,48 @@ from solo_notifications import mcp_server as mod
 from solo_notifications.mcp_server import build_server
 
 API_KEY = "EMPIRE_NOTIFICATIONS_API"
-READS = {"notifications.rule.list", "notifications.rule.get", "notifications.notification.list",
-         "notifications.notification.get", "notifications.notification.stats"}
+READS = {
+    "notifications.rule.list",
+    "notifications.rule.get",
+    "notifications.notification.list",
+    "notifications.notification.get",
+    "notifications.notification.stats",
+}
 WRITES = {"notifications.notification.create", "notifications.rule.create"}
-ARGS = {"notifications.rule.get": {"id": 1}, "notifications.notification.get": {"id": 1},
-        "notifications.notification.create": {"title": "t", "message": "m"},
-        "notifications.rule.create": {"name": "n", "rule_type": "stale"}}
+ARGS = {
+    "notifications.rule.get": {"id": 1},
+    "notifications.notification.get": {"id": 1},
+    "notifications.notification.create": {"title": "t", "message": "m"},
+    "notifications.rule.create": {"name": "n", "rule_type": "stale"},
+}
 SAMPLES = [
-    ("notifications.rule.list", {"active": True}, "GET", "/v1/notification-rules", {"active": "true"}),
-    ("notifications.notification.list", {"notification_type": ["overdue"], "undelivered": True, "limit": 5}, "GET",
-     "/v1/notifications", {"notification_type": "overdue", "undelivered": "true", "order": "desc", "limit": "5",
-                            "offset": "0"}),
-    ("notifications.notification.stats", {}, "GET", "/v1/notifications/stats", {"group_by": "notification_type"}),
+    (
+        "notifications.rule.list",
+        {"active": True},
+        "GET",
+        "/v1/notification-rules",
+        {"active": "true"},
+    ),
+    (
+        "notifications.notification.list",
+        {"notification_type": ["overdue"], "undelivered": True, "limit": 5},
+        "GET",
+        "/v1/notifications",
+        {
+            "notification_type": "overdue",
+            "undelivered": "true",
+            "order": "desc",
+            "limit": "5",
+            "offset": "0",
+        },
+    ),
+    (
+        "notifications.notification.stats",
+        {},
+        "GET",
+        "/v1/notifications/stats",
+        {"group_by": "notification_type"},
+    ),
 ]
 
 
@@ -28,10 +58,18 @@ def test_notes_are_console_only_and_cannot_use_delivered_kinds():
     srv = server(Fake())
     for kind in ("overdue", "reminder", "platform_check", "engagement_review"):
         with pytest.raises(Exception, match="invalid_arguments"):
-            call(srv, "notifications.notification.create", {"title": "t", "message": "m", "notification_type": kind})
+            call(
+                srv,
+                "notifications.notification.create",
+                {"title": "t", "message": "m", "notification_type": kind},
+            )
     for field in ("channel", "delivery_channel", "sent_at", "metadata"):
         with pytest.raises(Exception, match="invalid_arguments"):
-            call(srv, "notifications.notification.create", {"title": "t", "message": "m", field: "x"})
+            call(
+                srv,
+                "notifications.notification.create",
+                {"title": "t", "message": "m", field: "x"},
+            )
 
 
 def test_there_is_no_rule_update_tool_so_an_active_rule_cannot_be_widened():
@@ -45,11 +83,26 @@ def test_rules_are_created_inactive_and_cannot_change_channels_or_activation():
     assert b'"is_active":false' in fake.requests[0].content
     for field in ("is_active", "channels"):
         with pytest.raises(Exception, match="invalid_arguments"):
-            call(server(Fake()), "notifications.rule.create", {"name": "n", "rule_type": "stale", field: True})
+            call(
+                server(Fake()),
+                "notifications.rule.create",
+                {"name": "n", "rule_type": "stale", field: True},
+            )
 
 
-IDENTITY = {"actor": "x", "workspace_id": "w", "workspace": "w", "tenant_id": "t", "delegation": "d", "token": "t",
-            "authorization": "Bearer x", "sub": "s", "actor_id": "a", "tenant": "t", "owner_id": "o"}
+IDENTITY = {
+    "actor": "x",
+    "workspace_id": "w",
+    "workspace": "w",
+    "tenant_id": "t",
+    "delegation": "d",
+    "token": "t",
+    "authorization": "Bearer x",
+    "sub": "s",
+    "actor_id": "a",
+    "tenant": "t",
+    "owner_id": "o",
+}
 
 
 class Fake:
@@ -63,7 +116,10 @@ class Fake:
         def handle(request: httpx.Request) -> httpx.Response:
             self.requests.append(request)
             return httpx.Response(self.status, json=self.body)
-        return httpx.Client(transport=httpx.MockTransport(handle), base_url="https://api.test")
+
+        return httpx.Client(
+            transport=httpx.MockTransport(handle), base_url="https://api.test"
+        )
 
 
 def server(fake: Fake, read_only: bool = False):
@@ -132,14 +188,31 @@ def test_sample_calls_map_to_the_api():
         assert dict(request.url.params) == params, name
 
 
-@pytest.mark.parametrize("status,message", [(400, "400: invalid"), (401, "401: unauthorized"), (403, "403: forbidden"),
-                                             (404, "404: not_found"), (409, "409: conflict"), (422, "422: invalid"),
-                                             (429, "429: rate_limited"), (500, "500: upstream_error"),
-                                             (503, "503: upstream_error"), (418, "418: error")])
+@pytest.mark.parametrize(
+    "status,message",
+    [
+        (400, "400: invalid"),
+        (401, "401: unauthorized"),
+        (403, "403: forbidden"),
+        (404, "404: not_found"),
+        (409, "409: conflict"),
+        (422, "422: invalid"),
+        (429, "429: rate_limited"),
+        (500, "500: upstream_error"),
+        (503, "503: upstream_error"),
+        (418, "418: error"),
+    ],
+)
 def test_errors_are_a_fixed_message_from_the_status_only(status, message):
-    secret = {"detail": {"error": "forbidden", "reason": "leak-reason", "secret": "tok-123 do-not-leak"},
-              "error": {"code": "leak-code", "message": "do-not-leak"}}
-    name = sorted(READS)[0]
+    secret = {
+        "detail": {
+            "error": "forbidden",
+            "reason": "leak-reason",
+            "secret": "tok-123 do-not-leak",
+        },
+        "error": {"code": "leak-code", "message": "do-not-leak"},
+    }
+    name = min(READS)
     with pytest.raises(Exception) as caught:
         call(server(Fake(status=status, body=secret)), name, ARGS.get(name, {}))
     assert str(caught.value).endswith(": " + message)
@@ -147,42 +220,72 @@ def test_errors_are_a_fixed_message_from_the_status_only(status, message):
 
 
 def test_token_with_whitespace_or_control_characters_is_refused_without_echo():
-    name = sorted(READS)[0]
-    for bad in ("two words-abcdefgh", "line\nbreak-abcdefgh", "tab\there-abcdefgh", "nul\x00byte-abcdefgh", "   "):
+    name = min(READS)
+    for bad in (
+        "two words-abcdefgh",
+        "line\nbreak-abcdefgh",
+        "tab\there-abcdefgh",
+        "nul\x00byte-abcdefgh",
+        "   ",
+    ):
         fake = Fake()
         srv = build_server(fake.client(), lambda bad=bad: bad).server
         with pytest.raises(Exception) as caught:
             call(srv, name, ARGS.get(name, {}))
-        assert str(caught.value).endswith("401: unauthorized") and "abcdefgh" not in str(caught.value)
+        assert str(caught.value).endswith(
+            "401: unauthorized"
+        ) and "abcdefgh" not in str(caught.value)
         assert fake.requests == []
 
 
 def test_no_tool_exposes_a_forbidden_argument_name():
-    forbidden = {"actor", "actor_id", "workspace", "workspace_id", "tenant", "tenant_id", "delegation", "token",
-                 "authorization", "owner_id"}
+    forbidden = {
+        "actor",
+        "actor_id",
+        "workspace",
+        "workspace_id",
+        "tenant",
+        "tenant_id",
+        "delegation",
+        "token",
+        "authorization",
+        "owner_id",
+    }
     assert forbidden == set(mod.FORBIDDEN_ARGUMENTS)
     for tool in asyncio.run(server(Fake()).list_tools()):
         assert not forbidden & set(tool.input_schema["properties"]), tool.name
     with pytest.raises(ValueError):
+
         class Bad(mod.Strict):
             actor: str = "x"
-        mod.Toolbox("x", "x", Fake().client(), lambda: "t").tool("x.bad", Bad, "bad")(lambda a: a)
+
+        mod.Toolbox("x", "x", Fake().client(), lambda: "t").tool("x.bad", Bad, "bad")(
+            lambda a: a
+        )
 
 
 def test_transport_failure_does_not_echo_the_error():
     def boom(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("Authorization: Bearer tok-123 refused")
-    srv = build_server(httpx.Client(transport=httpx.MockTransport(boom), base_url="https://api.test"),
-                       lambda: "tok-123").server
+
+    srv = build_server(
+        httpx.Client(transport=httpx.MockTransport(boom), base_url="https://api.test"),
+        lambda: "tok-123",
+    ).server
     with pytest.raises(Exception) as caught:
-        call(srv, sorted(READS)[0], ARGS.get(sorted(READS)[0], {}))
+        call(srv, min(READS), ARGS.get(min(READS), {}))
     assert "tok-123" not in str(caught.value) and "503" in str(caught.value)
 
 
 def test_url_must_be_https_or_loopback(tmp_path):
     assert mod.api_url(API_KEY, {API_KEY: "https://x.example"}) == "https://x.example"
     assert mod.api_url(API_KEY, {API_KEY: "http://127.0.0.1:9"}) == "http://127.0.0.1:9"
-    for bad in ("http://example.com", "https://u:p@x.example", "https://x.example?a=1", "https://x.example#f"):
+    for bad in (
+        "http://example.com",
+        "https://u:p@x.example",
+        "https://x.example?a=1",
+        "https://x.example#f",
+    ):
         with pytest.raises(mod.ConfigError):
             mod.api_url(API_KEY, {API_KEY: bad})
     with pytest.raises(mod.ConfigError):
@@ -197,8 +300,16 @@ def test_token_order_and_file_mode(tmp_path):
         mod.bearer({"EMPIRE_TOKEN_FILE": str(token_file)})
     token_file.chmod(0o600)
     assert mod.bearer({"EMPIRE_TOKEN_FILE": str(token_file)}) == "from-file"
-    assert mod.bearer({"EMPIRE_TOKEN": "env", "EMPIRE_TOKEN_FILE": str(token_file)}) == "env"
-    assert mod.bearer({"EMPIRE_MCP_AUTOMATION": "x-y", "EMPIRE_AUTOMATION_TOKEN_X_Y": "auto"}) == "auto"
+    assert (
+        mod.bearer({"EMPIRE_TOKEN": "env", "EMPIRE_TOKEN_FILE": str(token_file)})
+        == "env"
+    )
+    assert (
+        mod.bearer(
+            {"EMPIRE_MCP_AUTOMATION": "x-y", "EMPIRE_AUTOMATION_TOKEN_X_Y": "auto"}
+        )
+        == "auto"
+    )
 
 
 def test_automation_name_is_validated_and_tokens_are_cleaned(tmp_path):
@@ -229,14 +340,22 @@ def test_validation_errors_are_fixed_and_name_no_argument_or_value():
     rejected = {}
     for name in sorted(READS | WRITES):
         tool = next(t for t in asyncio.run(srv.list_tools()) if t.name == name)
-        attempts = [{"UNTRUSTED_MARKER": "VALUE_MARKER"}, {**ARGS.get(name, {}), "UNTRUSTED_MARKER": 1}]
-        attempts += [{**ARGS.get(name, {}), field: {"k": "VALUE_MARKER"}} for field in tool.input_schema["properties"]]
+        attempts = [
+            {"UNTRUSTED_MARKER": "VALUE_MARKER"},
+            {**ARGS.get(name, {}), "UNTRUSTED_MARKER": 1},
+        ]
+        attempts += [
+            {**ARGS.get(name, {}), field: {"k": "VALUE_MARKER"}}
+            for field in tool.input_schema["properties"]
+        ]
         for args in attempts:
             try:
                 call(srv, name, args)
             except Exception as exc:  # noqa: BLE001
                 rejected[name] = rejected.get(name, 0) + 1
-                assert str(exc).endswith("invalid_arguments") and "MARKER" not in str(exc)
+                assert str(exc).endswith("invalid_arguments") and "MARKER" not in str(
+                    exc
+                )
                 assert exc.__cause__ is None and exc.__context__ is None
                 for link in _chain(exc):
                     assert "MARKER" not in str(link) and "MARKER" not in repr(link)
