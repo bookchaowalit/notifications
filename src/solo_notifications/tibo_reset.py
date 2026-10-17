@@ -62,7 +62,7 @@ class Post:
 def _date(value: Any) -> datetime:
     if not isinstance(value, str):
         raise ValueError("missing timestamp")  # noqa: TRY004 - callers treat any malformed relay data as ValueError
-    stamp = datetime.fromisoformat(value)
+    stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))  # noqa: FURB162 - keeps Z-normalisation; removing it changes which inputs are accepted
     if stamp.tzinfo is None:
         raise ValueError("timestamp must include timezone")
     return stamp.astimezone(UTC)

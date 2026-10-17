@@ -376,7 +376,7 @@ def due(rule: dict[str, Any], now: datetime) -> bool:
     last = rule.get("last_checked_at")
     if not last:
         return True
-    checked = datetime.fromisoformat(str(last))
+    checked = datetime.fromisoformat(str(last).replace("Z", "+00:00"))  # noqa: FURB162 - keeps Z-normalisation; removing it changes which inputs are accepted
     return now - checked >= timedelta(
         minutes=int(rule.get("check_interval_minutes") or 60)
     )
